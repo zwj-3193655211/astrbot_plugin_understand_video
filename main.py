@@ -168,7 +168,7 @@ VIDEO_URL_PATTERN = re.compile(
     "astrbot_plugin_understand_video",
     "zwj-3193655211",
     "视频理解助手 - B站/抖音/本地音视频转文字 + AI 总结（基于 video-transcriber skill）",
-    "2.0.0",
+    "2.1.0",
     "https://github.com/zwj-3193655211/astrbot_plugin_understand_video",
 )
 class UnderstandVideoPlugin(Star):
@@ -204,13 +204,83 @@ class UnderstandVideoPlugin(Star):
         self._is_processing: bool = False
         self._stop_flag: bool = False
 
+        # ----- 启动时环境自检 + 自动装缺失 Python 包 -----
+        self._startup_warnings: List[str] = []
+        self._auto_install_on_load()
+
         logger.info(
-            f"视频理解插件 v2.0 已加载\n"
+            f"视频理解插件 v2.1.0 已加载\n"
             f"  插件目录：{self.plugin_dir}\n"
             f"  数据目录：{self.data_dir}\n"
             f"  缓存目录：{self.cache_dir}\n"
             f"  模型目录：{self.model_dir}"
         )
+        if self._startup_warnings:
+            logger.warning("首次启动提示：\n" + "\n".join(f"  • {w}" for w in self._startup_warnings))
+
+    # ==================== 启动自检 ====================
+
+    def _auto_install_on_load(self) -> None:
+        """
+        启动时自检：自动安装缺失的 Python 包（funasr / modelscope），
+        ffmpeg 系统级包无法自动装，会在启动日志 + _check_env 里给友好提示。
+
+        不会下载 ASR 模型（~1.1GB，太大，不应自动）—— 用户主动跑 /video_install
+        或 /video_init 才下。
+        """
+        # 1. ffmpeg 检查（仅提示，无法自动装）
+        if not _check_ffmpeg():
+            sysname = platform.system()
+            if sysname == "Windows":
+                tip = "ffmpeg 未安装。Windows 装法：winget install ffmpeg，或从 https://www.gyan.dev/ffmpeg/builds/ 下载"
+            elif sysname == "Darwin":
+                tip = "ffmpeg 未安装。macOS 装法：brew install ffmpeg"
+            else:
+                tip = "ffmpeg 未安装。Linux 装法：sudo apt install ffmpeg（Debian/Ubuntu）或 sudo yum install ffmpeg（CentOS/RHEL）"
+            self._startup_warnings.append(tip)
+
+        # 2. 自动装本地 ASR 需要的 Python 包（funasr / modelscope）
+        cfg = _skill_config.load_config()
+        backend = cfg.get("asr_backend", "auto")
+        api_key = (cfg.get("asr_api_key") or cfg.get("siliconflow_api_key") or "").strip()
+        need_local_deps = backend in ("local", "auto") and not api_key
+
+        if not need_local_deps:
+            return
+
+        missing_pkgs: List[Tuple[str, str]] = []
+        try:
+            import funasr  # noqa: F401
+        except ImportError:
+            missing_pkgs.append(("funasr", "本地 ASR（Paraformer）"))
+        try:
+            import modelscope  # noqa: F401
+        except ImportError:
+            missing_pkgs.append(("modelscope", "下载 ASR 模型"))
+
+        if not missing_pkgs:
+            return
+
+        # 真的缺，自动装
+        names = [name for name, _ in missing_pkgs]
+        logger.info(f"检测到缺失依赖 {names}，自动 pip install...")
+        try:
+            import subprocess as _sp
+            mirror = "https://pypi.tuna.tsinghua.edu.cn/simple"
+            result = _sp.run(
+                [sys.executable, "-m", "pip", "install", *names, "-i", mirror],
+                capture_output=True, text=True, timeout=600,
+            )
+            if result.returncode == 0:
+                logger.info(f"自动安装 {names} 成功")
+            else:
+                self._startup_warnings.append(
+                    f"自动安装 {'/'.join(names)} 失败。请手动：pip install {' '.join(names)} -i https://pypi.tuna.tsinghua.edu.cn/simple"
+                )
+        except Exception as e:
+            self._startup_warnings.append(
+                f"自动安装 {'/'.join(names)} 异常：{e}。请手动：pip install {' '.join(names)} -i https://pypi.tuna.tsinghua.edu.cn/simple"
+            )
 
     # ==================== 配置桥接 ====================
 
@@ -289,9 +359,14 @@ class UnderstandVideoPlugin(Star):
 
         # 2. ffmpeg（本地音视频 / 模型就绪性检查需要）
         if not _check_ffmpeg():
-            missing.append(
-                "ffmpeg 未安装（必装；Windows: winget install ffmpeg，或装到 PATH）"
-            )
+            sysname = platform.system()
+            if sysname == "Windows":
+                tip = "ffmpeg 未安装（必装）。Windows: `winget install ffmpeg` 或下载 https://www.gyan.dev/ffmpeg/builds/ 后解压到 PATH"
+            elif sysname == "Darwin":
+                tip = "ffmpeg 未安装（必装）。macOS: `brew install ffmpeg`"
+            else:
+                tip = "ffmpeg 未安装（必装）。Linux: `sudo apt install ffmpeg` (Debian/Ubuntu) 或 `sudo yum install ffmpeg` (CentOS/RHEL)"
+            missing.append(tip)
 
         # 3. 后端依赖
         cfg = _skill_config.load_config()
@@ -561,6 +636,92 @@ class UnderstandVideoPlugin(Star):
                 "  /video_clear        - 清空缓存\n"
                 "  /video_open         - 打开缓存目录\n"
                 "  /video_help         - 完整帮助"
+            )
+        else:
+            yield event.plain_result(
+                f"⚠️ 仍有缺失项：\n" + "\n".join(f"  • {m}" for m in missing)
+            )
+
+    @filter.command("video_install")
+    async def cmd_install(self, event: AstrMessageEvent):
+        """一键装所有本地依赖：ffmpeg 检测 + pip 装包 + 下载 1.1GB ASR 模型"""
+        yield event.plain_result("🚀 一键安装 - 检查并安装本地依赖\n")
+
+        # 1. ffmpeg 检测
+        if not _check_ffmpeg():
+            sysname = platform.system()
+            if sysname == "Windows":
+                install_tip = "Windows: `winget install ffmpeg` 或下载 https://www.gyan.dev/ffmpeg/builds/"
+            elif sysname == "Darwin":
+                install_tip = "macOS: `brew install ffmpeg`"
+            else:
+                install_tip = "Linux: `sudo apt install ffmpeg` (Debian/Ubuntu) 或 `sudo yum install ffmpeg` (CentOS)"
+            yield event.plain_result(
+                f"❌ ffmpeg 未安装（必装；本地音视频需要）\n"
+                f"  {install_tip}\n\n"
+                f"装好后重启 AstrBot 即可。"
+            )
+        else:
+            yield event.plain_result(f"✅ ffmpeg 已就绪：{_check_ffmpeg()}")
+
+        # 2. 同步配置
+        self._sync_to_skill_config()
+        cfg = _skill_config.load_config()
+        backend = cfg.get("asr_backend", "auto")
+        api_key = cfg.get("asr_api_key") or cfg.get("siliconflow_api_key") or ""
+
+        # 3. 装 Python 包
+        need_local_deps = backend in ("local", "auto") and not api_key
+        if need_local_deps:
+            yield event.plain_result("📦 检查 Python 依赖（funasr / modelscope）...")
+            ok, msg = await self._install_local_deps()
+            if not ok:
+                yield event.plain_result(
+                    f"❌ 依赖安装失败：{msg}\n\n"
+                    f"手动装：\n"
+                    f"  {sys.executable} -m pip install funasr modelscope -i https://pypi.tuna.tsinghua.edu.cn/simple"
+                )
+                return
+            yield event.plain_result("✅ Python 依赖已就绪")
+        else:
+            yield event.plain_result("ℹ️ 当前为云端模式，跳过本地 Python 依赖")
+
+        # 4. 下模型
+        ready, missing = _skill_recognizer.check_models(cfg)
+        if ready:
+            yield event.plain_result("✅ ASR 模型已就绪")
+        else:
+            if backend == "cloud":
+                yield event.plain_result(
+                    f"ℹ️ 当前使用云端 ASR，无需下载本地模型\n"
+                    f"  （{len(missing)} 个本地模型缺失，要切本地模式再下）"
+                )
+            else:
+                yield event.plain_result(
+                    f"📥 正在下载 ASR 模型（约 1.1GB，请耐心等待 2-10 分钟）..."
+                )
+                init_result = await asyncio.get_event_loop().run_in_executor(
+                    None, _vt.initialize
+                )
+                if init_result.get("status") == "success":
+                    yield event.plain_result("✅ ASR 模型下载完成")
+                else:
+                    yield event.plain_result(
+                        f"❌ 模型下载失败，请检查网络后重试\n"
+                        f"  详情：{init_result}"
+                    )
+                    return
+
+        # 5. 最终状态
+        yield event.plain_result("\n📊 最终环境状态：")
+        ready, missing = self._check_env()
+        if ready:
+            yield event.plain_result(
+                "🎉 全部就绪！\n\n"
+                "现在可以：\n"
+                "  • 发 B 站/抖音链接（含 URL 的消息自动识别处理）\n"
+                "  • 或用 /video <链接> 命令\n"
+                "  • /video_status 看详细状态"
             )
         else:
             yield event.plain_result(

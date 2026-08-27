@@ -1,4 +1,4 @@
-# 视频理解助手（AstrBot 插件 v2.0）
+# 视频理解助手（AstrBot 插件 v2.1.0）
 
 <div align="center">
 
@@ -67,33 +67,76 @@ Bot:  📺 视频理解结果
 - **缓存管理** — 音频和转写文本自动缓存，重复处理秒回
 - **数据规范** — 所有数据（缓存/模型/用户配置）放在 AstrBot 数据目录下，插件升级不丢数据
 
-## 快速开始
+## 首次使用（5 步检查表）
 
-1. 把插件放进 AstrBot 的 `plugins/` 目录（或通过 WebUI 上传）
-2. 重启 AstrBot
-3. 在 AstrBot WebUI 配置面板，填好 ASR 后端（推荐先用云端 API key 试通）：
-   - `asr_backend` = `cloud`
-   - `asr_api_key` = 你的 API key（[SiliconFlow](https://siliconflow.cn) 免费注册）
-4. 群里发链接或 `/video <链接>`：
+第一次用这个插件，照着这 5 步做就行：
+
+### 1. 装 AstrBot（如果你还没装）
+
+AstrBot ≥ 4.16，Python 3.10–3.12。装好后**激活虚拟环境**：
+```bash
+# Windows
+.venv\Scripts\activate
+# Linux / macOS
+source .venv/bin/activate
+```
+
+### 2. 装 ffmpeg（必装）
+
+插件靠 ffmpeg 抽音轨。装到系统 PATH：
+
+| 平台 | 命令 |
+|------|------|
+| Windows | `winget install ffmpeg`（或从 https://www.gyan.dev/ffmpeg/builds/ 下载解压到 PATH） |
+| macOS | `brew install ffmpeg` |
+| Debian/Ubuntu | `sudo apt install ffmpeg` |
+| CentOS/RHEL | `sudo yum install ffmpeg` |
+
+### 3. 装插件
+
+把本仓库放到 AstrBot 的 `data/plugins/astrbot_plugin_understand_video/` 目录，重启 AstrBot。**或者**通过 WebUI 输入仓库地址 `https://github.com/zwj-3193655211/astrbot_plugin_understand_video.git` 装。
+
+### 4. 一键安装本地依赖
+
+在群里发 `/video_install` —— 插件会自动：
+- ✅ 检测 ffmpeg
+- ✅ `pip install funasr modelscope`（本地 ASR 需要）
+- ✅ 下载 1.1GB ASR 模型（VAD + PUNC + Paraformer）
+- ✅ 最终环境报告
+
+**或者**走云端模式（不需要本地包和模型）：在 AstrBot WebUI 配置面板填 `asr_api_key`（[SiliconFlow](https://siliconflow.cn) 免费注册）。
+
+### 5. 开始用
+
+发链接就能自动触发（v2.1.0 自然语言识别），或者用命令：
 
 ```
-# v2.1.0 自然语言触发（推荐）
+# 自然语言（推荐）
 https://b23.tv/xxx 这个视频讲了啥
-帮我转写 https://www.bilibili.com/video/BV1xx
 
-# 或用命令触发（兼容旧版）
-/video BV1xx411c7mD
-/video https://v.douyin.com/xxx
+# 命令触发
+/video https://www.bilibili.com/video/BV1xx
 ```
 
-如要切换本地模式（无 API key），运行 `/video_init` 让插件自动下载 ~1.1GB 模型。
+发完后 bot 会：自动下载音频 → ASR 转写 → AI 总结内容。
+
+---
+
+## 快速开始（如果你已经装好）
+
+1. 群里发 `/video_install`（一键装所有本地依赖）
+2. 等 ~5 分钟模型下载完
+3. 发 B 站/抖音链接，开始用
+
+如要切换云端模式（不用下载 1.1GB 模型），跳过 `/video_install`，在 AstrBot WebUI 填 `asr_api_key` 即可。
 
 ## 命令
 
 | 命令 | 说明 |
 |------|------|
 | `/video <链接/路径>` | 处理视频（命令触发方式） |
-| `/video_init` | 初始化环境（装依赖 + 下模型 + 写配置） |
+| `/video_install` | **一键装所有本地依赖**（ffmpeg 检测 + pip 装包 + 下载 1.1GB ASR 模型） |
+| `/video_init` | 初始化环境（兼容旧版，等同 `/video_install`） |
 | `/video_status` | 查看环境 / 后端 / 模型 / 缓存状态 |
 | `/video_clear` | 清空缓存 |
 | `/video_stop` | 取消任务（语义占位 - 阻塞任务需等当前完成） |
@@ -101,6 +144,7 @@ https://b23.tv/xxx 这个视频讲了啥
 | `/video_help` | 完整帮助 |
 
 > **v2.1.0+ 触发方式**：消息中**含 B 站/抖音/YouTube/AcFun/西瓜/微博链接**时自动识别并触发，不用加 `/video` 前缀。
+> **v2.1.0+ 启动自检**：插件加载时自动 pip install 缺失的 funasr/modelscope；ffmpeg 缺失会在日志和 `/video_status` 里明确提示安装命令。
 
 ## 配置面板
 
