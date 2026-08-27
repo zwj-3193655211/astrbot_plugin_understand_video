@@ -23,3 +23,6 @@ desktop.ini
 *.tmp
 test_*.py
 smoke_*.py
+
+# 发布物料（本地用，不进仓库）
+marketplace_entry.json

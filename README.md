@@ -1,6 +1,55 @@
 # 视频理解助手（AstrBot 插件 v2.0）
 
-把 **B 站 / 抖音 / 通用平台 / 本地音视频** 转成带时间戳的文字，再用 LLM 做内容总结。底层基于 [video-transcriber skill](https://github.com/zwj-3193655211/video-transcriber)，把 skill 整包嵌入在 `core/` 子目录中，插件只做 AstrBot 命令面和配置桥接。
+<div align="center">
+
+### 🎬 一键把视频变文字 + AI 总结
+
+**B 站 · 抖音 · YouTube · 本地音视频 → 逐字转写 → LLM 总结**
+
+[![AstrBot](https://img.shields.io/badge/AstrBot-%3E%3D4.16-blue)](https://github.com/AstrBotDevs/AstrBot) [![Python](https://img.shields.io/badge/python-3.10--3.12-green)]() [![License](https://img.shields.io/badge/license-MIT-purple)]()
+
+> **AstrBot 市场里唯一**支持多源（包含抖音 + 通用平台）+ 视频逐字 ASR + AI 总结的端到端插件
+
+</div>
+
+---
+
+## 一句话总结
+
+扔个 B 站/抖音/YouTube 链接（或本地视频路径）给机器人，它自动下载音频 → 逐字语音转写 → LLM 总结内容。无需字幕、无需手动操作，无需安装 ffmpeg、无需 1.1GB 模型（云端模式）。
+
+## 一张表看懂
+
+| 你给的输入 | 怎么转写 | 默认后端 |
+|---|---|---|
+| `BV1xx411c7mD` | B 站官方 DASH 音轨 | FunASR Paraformer-Large（GPU 5-10x） |
+| `https://b23.tv/xxx` | 自动展开短链 | 同上 |
+| `https://v.douyin.com/xxx/` | H5 分享页 → 浏览器 cookie → API | 同上 |
+| `C:\Videos\lecture.mp4` | ffmpeg 抽音轨 | 同上 |
+| `D:\audio\interview.wav` | 直读 | 同上 |
+
+无 GPU / 不想下模型？配置 `asr_api_key` 走 SiliconFlow / 火山方舟豆包 / 任意 OpenAI 兼容端点，按用量计费，零下载。
+
+## 真实使用
+
+```
+用户: /video https://www.bilibili.com/video/BV1xx411c7mD
+Bot:  🎬 开始处理（B 站）
+      输入：https://www.bilibili.com/video/BV1xx411c7mD
+Bot:  ✅ 转写完成
+      📌 标题：xxx
+      📁 来源：B 站
+      ⏱️ 时长：12分30秒
+      📝 字符数：3254
+      🕒 耗时：3分12秒
+      💾 已保存：xxx
+Bot:  🤖 正在生成 AI 总结...
+Bot:  📺 视频理解结果
+      📌 标题：xxx
+      🤖 AI 总结：
+      1. 视频主要内容概述
+         ...
+```
 
 > 旧版本（v1.x）只支持 B 站 + SenseVoice 单模型 + 98MB ffmpeg.exe 捆绑。
 > 新版本（v2.0）原生支持 B 站/抖音/通用平台/本地音视频 + 本地/云端两种 ASR 后端 + 零 ffmpeg 捆绑。

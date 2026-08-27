@@ -1,7 +1,53 @@
 name: astrbot_plugin_understand_video
 display_name: 视频理解助手
-desc: 把B站/抖音/通用平台/本地音视频转成文字，AI总结内容。基于 video-transcriber skill。
+short_desc: B站/抖音/通用平台/本地音视频 → 一键转文字 + AI 总结
+desc: |
+  把 B 站、抖音、YouTube/AcFun/微博（通过 yt-dlp）、本地音视频（mp4 / mkv / mp3 / wav / m4a 等）转成带时间戳的文字，再用 LLM 做内容总结。
+
+  **核心特性**
+  - 🎙️ 多源输入：B 站（BV / bilibili.com / b23.tv 短链）/ 抖音（v.douyin.com / douyin.com）/ 通用平台（YouTube / AcFun / 微博，需 yt-dlp）/ 本地音视频
+  - 🚀 双 ASR 后端：本地 FunASR Paraformer-Large（GPU 最佳，~1.1GB 模型）/ 云端 SiliconFlow / 火山方舟 / 任意 OpenAI 兼容端点（按用量计费，零模型下载）
+  - 🤖 AI 总结：复用 AstrBot 现有 LLM provider，提示词可配置
+  - 💾 缓存管理：音频和转写文本自动缓存，重复处理秒回
+  - 🛠️ 数据规范：所有数据（缓存/模型/配置）放在 AstrBot 数据目录，升级不丢数据
+
+  **使用**
+  ```
+  /video BV1xx411c7mD            # B 站视频
+  /video https://b23.tv/abc123     # B 站短链
+  /video https://v.douyin.com/xxx  # 抖音
+  /video C:\Videos\lecture.mp4     # 本地视频
+  /video C:\audios\interview.wav  # 本地音频
+  /video_init                      # 初始化（按需装依赖+下模型）
+  /video_status                    # 环境/后端/缓存状态
+  /video_clear                     # 清空缓存
+  /video_open                      # 打开缓存目录
+  /video_help                      # 完整帮助
+  ```
+
+  底层基于 [video-transcriber skill](https://github.com/zwj-3193655211/video-transcriber)。
 version: v2.0.0
 author: zwj-3193655211
 repo: https://github.com/zwj-3193655211/astrbot_plugin_understand_video
-astrbot_version: ">=4.16"
+astrbot_version: ">=4.16,<5"
+support_platforms:
+  - aiocqhttp
+  - qq_official
+  - lark
+  - telegram
+  - discord
+  - slack
+  - wecom
+  - dingtalk
+social_link: https://github.com/zwj-3193655211
+tags:
+  - 视频转文字
+  - 语音转文字
+  - ASR
+  - B站
+  - 抖音
+  - YouTube
+  - 视频总结
+  - AI总结
+  - FunASR
+  - Paraformer
