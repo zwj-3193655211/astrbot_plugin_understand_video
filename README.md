@@ -51,12 +51,17 @@ Bot:  📺 视频理解结果
          ...
 ```
 
-> 旧版本（v1.x）只支持 B 站 + SenseVoice 单模型 + 98MB ffmpeg.exe 捆绑。
-> 新版本（v2.0）原生支持 B 站/抖音/通用平台/本地音视频 + 本地/云端两种 ASR 后端 + 零 ffmpeg 捆绑。
+> **v2.1.0 重要更新**：消息里含 B 站 / 抖音 / YouTube 等链接，**自动识别触发**，不用加 `/video` 前缀。
+> 例：`https://b23.tv/xxx 这个视频讲了啥` → 直接转写。命中后 stop_event() 阻止 LLM 处理，避免 Qbot 自问自答瞎说。
+>
+> **旧版本（v1.x）** 只支持 B 站 + SenseVoice 单模型 + 98MB ffmpeg.exe 捆绑。
+> **v2.0** 原生支持 B 站/抖音/通用平台/本地音视频 + 本地/云端两种 ASR 后端 + 零 ffmpeg 捆绑。
+> **v2.1.0** 加自然语言链接触发（不用记命令）。
 
 ## 功能
 
 - **多源输入** — B 站（BV 号 / bilibili.com / b23.tv 短链）/ 抖音（v.douyin.com / douyin.com）/ 通用平台（YouTube / AcFun / 微博，需 yt-dlp）/ 本地音视频（mp4 / mkv / mp3 / wav / m4a 等）
+- **自然语言链接触发（v2.1.0）** — 消息里含 B 站/抖音/YouTube/AcFun 链接自动识别，不用加 `/video` 前缀
 - **两种 ASR 后端** — 本地 FunASR Paraformer-Large（GPU 最佳）/ 云端 SiliconFlow / 火山方舟豆包 / 任意 OpenAI 兼容端点（按用量计费，零模型下载）
 - **AI 总结** — 复用 AstrBot 现有的 LLM provider，提示词可配置
 - **缓存管理** — 音频和转写文本自动缓存，重复处理秒回
@@ -69,7 +74,17 @@ Bot:  📺 视频理解结果
 3. 在 AstrBot WebUI 配置面板，填好 ASR 后端（推荐先用云端 API key 试通）：
    - `asr_backend` = `cloud`
    - `asr_api_key` = 你的 API key（[SiliconFlow](https://siliconflow.cn) 免费注册）
-4. 群里发 `/video BV1xx411c7mD` 开始用
+4. 群里发链接或 `/video <链接>`：
+
+```
+# v2.1.0 自然语言触发（推荐）
+https://b23.tv/xxx 这个视频讲了啥
+帮我转写 https://www.bilibili.com/video/BV1xx
+
+# 或用命令触发（兼容旧版）
+/video BV1xx411c7mD
+/video https://v.douyin.com/xxx
+```
 
 如要切换本地模式（无 API key），运行 `/video_init` 让插件自动下载 ~1.1GB 模型。
 
@@ -77,13 +92,15 @@ Bot:  📺 视频理解结果
 
 | 命令 | 说明 |
 |------|------|
-| `/video <链接/路径>` | 处理视频（B 站/抖音/通用平台/本地音视频） |
+| `/video <链接/路径>` | 处理视频（命令触发方式） |
 | `/video_init` | 初始化环境（装依赖 + 下模型 + 写配置） |
 | `/video_status` | 查看环境 / 后端 / 模型 / 缓存状态 |
 | `/video_clear` | 清空缓存 |
 | `/video_stop` | 取消任务（语义占位 - 阻塞任务需等当前完成） |
 | `/video_open` | 打开缓存目录 |
 | `/video_help` | 完整帮助 |
+
+> **v2.1.0+ 触发方式**：消息中**含 B 站/抖音/YouTube/AcFun/西瓜/微博链接**时自动识别并触发，不用加 `/video` 前缀。
 
 ## 配置面板
 

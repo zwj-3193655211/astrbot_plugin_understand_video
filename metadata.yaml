@@ -4,6 +4,12 @@ short_desc: B站/抖音/通用平台/本地音视频 → 一键转文字 + AI �
 desc: |
   把 B 站、抖音、YouTube/AcFun/微博（通过 yt-dlp）、本地音视频（mp4 / mkv / mp3 / wav / m4a 等）转成带时间戳的文字，再用 LLM 做内容总结。
 
+  **v2.1.0 重要更新**
+  - ✨ **自然语言链接触发**：消息里含 B 站 / 抖音 / YouTube 等链接**自动识别**，不用加 `/video` 前缀
+    - 例：「https://b23.tv/xxx 这个视频讲了啥」→ 直接触发转写
+    - 命中后 stop_event() 阻止 LLM 处理，由插件自己接管（避免 Qbot 自问自答）
+  - ✅ B 站短链（b23.tv）展开支持
+
   **核心特性**
   - 🎙️ 多源输入：B 站（BV / bilibili.com / b23.tv 短链）/ 抖音（v.douyin.com / douyin.com）/ 通用平台（YouTube / AcFun / 微博，需 yt-dlp）/ 本地音视频
   - 🚀 双 ASR 后端：本地 FunASR Paraformer-Large（GPU 最佳，~1.1GB 模型）/ 云端 SiliconFlow / 火山方舟 / 任意 OpenAI 兼容端点（按用量计费，零模型下载）
@@ -13,20 +19,23 @@ desc: |
 
   **使用**
   ```
-  /video BV1xx411c7mD            # B 站视频
-  /video https://b23.tv/abc123     # B 站短链
-  /video https://v.douyin.com/xxx  # 抖音
-  /video C:\Videos\lecture.mp4     # 本地视频
-  /video C:\audios\interview.wav  # 本地音频
-  /video_init                      # 初始化（按需装依赖+下模型）
-  /video_status                    # 环境/后端/缓存状态
-  /video_clear                     # 清空缓存
-  /video_open                      # 打开缓存目录
-  /video_help                      # 完整帮助
+  # 自然语言触发（v2.1.0+ 推荐）
+  https://b23.tv/xxx 这个视频讲了啥
+  帮我转写 https://www.bilibili.com/video/BV1xx
+
+  # 命令触发（兼容旧版）
+  /video BV1xx411c7mD
+  /video https://v.douyin.com/xxx
+  /video C:\Videos\lecture.mp4
+  /video_init        # 初始化（按需装依赖 + 下模型）
+  /video_status      # 环境 / 后端 / 缓存状态
+  /video_clear       # 清空缓存
+  /video_open        # 打开缓存目录
+  /video_help        # 完整帮助
   ```
 
   底层基于 [video-transcriber skill](https://github.com/zwj-3193655211/video-transcriber)。
-version: v2.0.0
+version: v2.1.0
 author: zwj-3193655211
 repo: https://github.com/zwj-3193655211/astrbot_plugin_understand_video
 astrbot_version: ">=4.16,<5"

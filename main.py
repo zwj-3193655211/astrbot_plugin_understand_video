@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import platform
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -138,6 +139,27 @@ def _resolve_input(text: str) -> str:
             t = t[len(prefix):].lstrip()
             break
     return t
+
+
+# 视频链接自动识别正则（用于自然语言触发，不需 /video 前缀）
+# 覆盖：B 站（b23.tv / bilibili.com / m.bilibili.com）/ 抖音（v.douyin / douyin.com）
+#       YouTube（youtu.be / youtube.com）/ AcFun / 西瓜视频 / 微博
+# 注：前缀用 [a-z0-9.-]* 兼容 www. / m. 等子域
+# 字符类放宽：允许 URL 常见字符（含 `?` `=` `&` 等 query 字符）
+VIDEO_URL_PATTERN = re.compile(
+    r"https?://[a-zA-Z0-9.\-]*"
+    r"(?:"
+    r"b23\.tv"
+    r"|bili(?:bili)?\.com"
+    r"|v\.douyin\.com|iesdouyin\.com|douyin\.com"
+    r"|youtu\.?be|youtube\.com"
+    r"|acfun\.cn"
+    r"|ixigua\.com"
+    r"|weibo\.(?:com|cn)"
+    r")"
+    r"(?:[/?&=#%\w\-.~:+\u4e00-\u9fff]*)?",
+    re.IGNORECASE,
+)
 
 
 # ==================== 插件主类 ====================
@@ -285,6 +307,53 @@ class UnderstandVideoPlugin(Star):
                 missing.append("modelscope（本地 ASR 必需，云端模式不需要）")
 
         return len(missing) == 0, missing
+
+    # ==================== 自然语言链接触发（不需 /video 前缀）====================
+
+    @filter.event_message_type(filter.EventMessageType.ALL, priority=10)
+    async def auto_detect_video(self, event: AstrMessageEvent):
+        """
+        自动识别消息中包含的视频链接（B站/抖音/YouTube/AcFun/西瓜/微博），
+        命中后 stop_event() 阻止 LLM 处理，由插件自己接管。
+
+        这样用户发 "https://b23.tv/xxx 这个视频讲了啥" 就能被识别，
+        不用记 /video 命令。
+
+        排除条件：
+        - 消息以 /video、/understand、/transcribe 开头（让 cmd_video 处理）
+        - 已经在处理中（避免并发）
+        - 不是 URL（只是文字）
+        """
+        try:
+            msg = (event.message_str or "").strip()
+        except Exception:
+            return
+
+        if not msg:
+            return
+        # 命令前缀的让 cmd_video 处理，不重复触发
+        if msg.lower().lstrip().startswith(("/video", "/understand", "/transcribe", "/video_status", "/video_init", "/video_clear", "/video_stop", "/video_open", "/video_help")):
+            return
+        # 已经处理中
+        if getattr(self, "_is_processing", False):
+            return
+
+        match = VIDEO_URL_PATTERN.search(msg)
+        if not match:
+            return
+
+        url = match.group(0)
+        logger.info(f"[video] auto-detected URL: {url}")
+
+        # 阻止 LLM 处理（这条消息我们自己接管）
+        try:
+            event.stop_event()
+        except Exception:
+            pass
+
+        # 直接复用 cmd_video 的处理流程（异步化不阻塞事件循环）
+        async for r in self.cmd_video(event):
+            yield r
 
     # ==================== 命令处理 ====================
 
