@@ -43,6 +43,10 @@ from astrbot.api import logger
 # ==================== 内嵌 skill 导入 ====================
 # 把 core/ 加进 sys.path，让 skill 模块可以 import
 _PLUGIN_DIR = Path(__file__).resolve().parent
+# 注意：_PLUGIN_DATA_DIR 在 __init__ 里通过 StarTools.get_data_dir 设置
+# 这里先用 _PLUGIN_DIR/../.. 拼相对路径作为兜底（plugin 部署后通常是 Astrbot/data/plugin_data/<name>）
+_PLUGIN_DATA_DIR_FALLBACK = _PLUGIN_DIR.parent.parent / "plugin_data" / "astrbot_plugin_understand_video"
+_PLUGIN_DATA_DIR = _PLUGIN_DATA_DIR_FALLBACK  # 启动时被 __init__ 覆盖
 _CORE_DIR = _PLUGIN_DIR / "core"
 if str(_CORE_DIR) not in sys.path:
     sys.path.insert(0, str(_CORE_DIR))
@@ -109,14 +113,49 @@ def _dir_size(path: Path) -> int:
 
 
 def _check_ffmpeg() -> Optional[str]:
-    """找系统 ffmpeg（PATH / 插件目录）"""
+    """多路径查找 ffmpeg（避免用户 PATH 还没刷新导致找不到）
+
+    查找顺序：
+    1. FFMPEG_PATH 环境变量（用户显式指定，最优先）
+    2. 系统 PATH（shutil.which）
+    3. 插件 data 目录（ffmpeg.exe/ffmpeg，用户手动放这里最稳）
+    4. AstrBot 安装目录（ffmpeg.exe/ffmpeg）
+    5. 兜底：插件目录（历史兼容）
+
+    推荐用法：用户把 ffmpeg.exe 复制到
+    C:\\Users\\<name>\\Astrbot\\data\\plugin_data\\astrbot_plugin_understand_video\\
+    即使 PATH 没刷新也能用。
+    """
+    # 1. 环境变量
+    env_path = os.environ.get("FFMPEG_PATH", "").strip()
+    if env_path and Path(env_path).exists():
+        return env_path
+
+    # 2. 系统 PATH
     ffmpeg = shutil_which("ffmpeg") or shutil_which("ffmpeg.exe")
     if ffmpeg:
         return ffmpeg
-    # 兜底：插件目录下的 ffmpeg.exe
-    bundled = _PLUGIN_DIR / "ffmpeg.exe"
-    if bundled.exists():
-        return str(bundled)
+
+    # 3. 插件 data 目录（推荐用法 - 不依赖 PATH）
+    data_dir = _PLUGIN_DATA_DIR if '_PLUGIN_DATA_DIR' in globals() else _PLUGIN_DATA_DIR_FALLBACK
+    for name in ("ffmpeg.exe", "ffmpeg"):
+        cand = data_dir / name
+        if cand.exists():
+            return str(cand)
+
+    # 4. AstrBot 安装目录
+    astrbot_root = Path(__file__).resolve().parent.parent.parent  # plugin/..  → Astrbot/
+    for name in ("ffmpeg.exe", "ffmpeg"):
+        cand = astrbot_root / name
+        if cand.exists():
+            return str(cand)
+
+    # 5. 插件目录（历史兼容）
+    for name in ("ffmpeg.exe", "ffmpeg"):
+        cand = _PLUGIN_DIR / name
+        if cand.exists():
+            return str(cand)
+
     return None
 
 
@@ -178,6 +217,10 @@ class UnderstandVideoPlugin(Star):
         super().__init__(context)
         self.config = config
 
+        # 设置全局 _PLUGIN_DATA_DIR（_check_ffmpeg 用）
+        global _PLUGIN_DATA_DIR
+        _PLUGIN_DATA_DIR = StarTools.get_data_dir("astrbot_plugin_understand_video")
+
         # ----- 路径规划 -----
         # 严格遵循 AstrBot 规范：模型/缓存/用户配置都放 data_dir（plugin_data_dir），
         # 插件目录只放代码。
@@ -217,6 +260,17 @@ class UnderstandVideoPlugin(Star):
         )
         if self._startup_warnings:
             logger.warning("首次启动提示：\n" + "\n".join(f"  • {w}" for w in self._startup_warnings))
+
+        # 启动时记录 ffmpeg 探测结果（用户调试用）
+        ffmpeg_path = _check_ffmpeg()
+        if ffmpeg_path:
+            logger.info(f"ffmpeg OK: {ffmpeg_path}")
+        else:
+            # PATH 里没有，但插件 data 目录里可能也没有——给用户最具体的提示
+            data_dir = StarTools.get_data_dir("astrbot_plugin_understand_video")
+            logger.warning(
+                f"ffmpeg 找不到。把 ffmpeg.exe 放到 {data_dir} 即可（无需重启）"
+            )
 
     # ==================== 启动自检 ====================
 
