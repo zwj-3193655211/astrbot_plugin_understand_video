@@ -1,0 +1,11 @@
+# 视频理解插件 v2.0 - AstrBot 依赖清单
+#
+# 默认最小依赖：仅运行云端 ASR 模式时需要（纯标准库，无需第三方包）。
+# 本地 FunASR 模式（asr_backend=local）所需的 funasr / modelscope / torch
+# 会在用户首次运行 /video_init 时按需安装（自动从清华镜像拉取）。
+#
+# 卸载/重装 AstrBot 时不会破坏已下载的模型（模型存放在 data_dir/model/）。
+#
+# 可选依赖（如需支持 YouTube/AcFun/微博 等通用平台，请手动安装）：
+#   yt-dlp
+#   selenium

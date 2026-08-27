@@ -1,0 +1,80 @@
+{
+    "max_duration_minutes": {
+        "type": "int",
+        "description": "单视频上限（分钟，0 = 不限）",
+        "hint": "超过此时长直接拒绝处理，避免吃光机器资源。0 表示不限。",
+        "default": 70
+    },
+    "asr_backend": {
+        "type": "string",
+        "description": "ASR 后端类型",
+        "hint": "auto=本地优先否则云端（推荐）；local=纯本地FunASR（要1.1GB模型）；cloud=纯云端（需API key，零模型）",
+        "default": "auto"
+    },
+    "asr_provider": {
+        "type": "string",
+        "description": "云端 ASR 供应商",
+        "hint": "siliconflow=硅基流动（默认，免费注册）/ openai=任意 OpenAI 兼容端点（火山方舟、OpenAI、智谱等）",
+        "default": "siliconflow"
+    },
+    "asr_api_key": {
+        "type": "string",
+        "description": "云端 ASR API Key",
+        "hint": "云端模式必填。也可用环境变量 ASR_API_KEY 覆盖。",
+        "default": ""
+    },
+    "asr_base_url": {
+        "type": "string",
+        "description": "OpenAI 兼容端点 base_url",
+        "hint": "仅当 asr_provider=openai 时必填。例：火山方舟 https://ark.cn-beijing.volces.com/api/v3",
+        "default": ""
+    },
+    "asr_model": {
+        "type": "string",
+        "description": "云端转写模型名",
+        "hint": "默认 SenseVoiceSmall（硅基流动）。火山方舟可填 doubao-seed-asr-1。",
+        "default": "FunAudioLLM/SenseVoiceSmall"
+    },
+    "asr_verbose_json": {
+        "type": "bool",
+        "description": "请求 verbose_json 拿句级时间戳",
+        "hint": "仅 OpenAI 兼容供应商生效（火山方舟豆包等支持）。打开后会拿到 segments。",
+        "default": false
+    },
+    "use_punc": {
+        "type": "bool",
+        "description": "本地模式启用 CT-PUNC 标点恢复",
+        "hint": "关闭后输出无标点，模型加载更快",
+        "default": true
+    },
+    "device": {
+        "type": "string",
+        "description": "本地 ASR 设备",
+        "hint": "auto=自动检测GPU / cuda=强制GPU / cpu=强制CPU",
+        "default": "auto"
+    },
+    "cookie": {
+        "type": "string",
+        "description": "B 站 / 抖音 cookie（可选）",
+        "hint": "登录态 cookie，可拉大会员视频、提高下载成功率。整段 cookie 字符串粘贴即可。",
+        "default": ""
+    },
+    "model_root": {
+        "type": "string",
+        "description": "本地 ASR 模型目录",
+        "hint": "留空则用默认（插件数据目录/model）。如已下完 Paraformer 三件套，可指向其他路径跳过下载。",
+        "default": ""
+    },
+    "summary_model": {
+        "type": "string",
+        "description": "AI 总结使用的模型（AstrBot LLM）",
+        "hint": "留空使用 AstrBot 当前 provider 的默认模型。例：qwen3.5:0.8b / gpt-4o-mini",
+        "default": ""
+    },
+    "summary_prompt": {
+        "type": "text",
+        "description": "AI 总结提示词模板",
+        "hint": "使用 {content} 占位符表示转写文本，{title} 表示视频标题",
+        "default": "请对以下视频的转写内容进行总结，提取关键信息和要点：\n\n视频标题：{title}\n\n转写内容：\n{content}\n\n请按以下格式输出：\n1. 视频主要内容概述\n2. 关键信息点（列表形式）\n3. 核心结论或观点"
+    }
+}

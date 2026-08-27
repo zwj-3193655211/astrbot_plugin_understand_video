@@ -1,0 +1,7 @@
+name: astrbot_plugin_understand_video
+display_name: 视频理解助手
+desc: 把B站/抖音/通用平台/本地音视频转成文字，AI总结内容。基于 video-transcriber skill。
+version: v2.0.0
+author: zwj-3193655211
+repo: https://github.com/zwj-3193655211/astrbot_plugin_understand_video
+astrbot_version: ">=4.16"

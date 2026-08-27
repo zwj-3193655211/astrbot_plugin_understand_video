@@ -1,0 +1,174 @@
+{
+  "name": "video-transcriber",
+  "version": "3.0.0",
+  "type": "python-skill",
+  "display_name": "Video Transcriber",
+  "description": "把 B 站视频、抖音视频或本地音视频转写为带时间戳的文字",
+  "long_description": "video-transcriber 是一个 Agent Skills 标准 skill，支持 B 站链接（BV 号 / bilibili.com URL / b23.tv 短链）、抖音链接（v.douyin.com / douyin.com）和本地音视频文件（mp4, mkv, mp3, wav, m4a 等）的语音转写。基石模型为 FunASR Paraformer-Large + FSMN-VAD + CT-PUNC，中文场景带标点恢复与句级时间戳。首次运行自动下载模型（~1.1GB），支持复用已有模型目录跳过下载。",
+  "author": "zwj-3193655211",
+  "license": "MIT",
+  "homepage": "https://github.com/zwj-3193655211/video-transcriber",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zwj-3193655211/video-transcriber.git"
+  },
+  "keywords": [
+    "video",
+    "transcription",
+    "speech-to-text",
+    "asr",
+    "bilibili",
+    "b站",
+    "funasr",
+    "paraformer",
+    "video-to-text",
+    "video2text",
+    "字幕",
+    "transcript",
+    "skill"
+  ],
+  "categories": [
+    "media-processing",
+    "ai-ml",
+    "productivity"
+  ],
+  "compatibility": {
+    "python": ">=3.10,<3.13",
+    "platforms": [
+      "windows",
+      "linux",
+      "macos"
+    ],
+    "system_tools": [
+      "ffmpeg"
+    ]
+  },
+  "entry_points": {
+    "module": "video_transcriber.py",
+    "functions": {
+      "run": "run",
+      "info": "info",
+      "check_status": "check_status",
+      "initialize": "initialize",
+      "setup": "setup",
+      "clear_cache": "clear_cache"
+    },
+    "cli": "video_transcriber.py"
+  },
+  "requirements": {
+    "python_version": ">=3.10,<3.13",
+    "disk_space": "0 for cloud ASR; ~1.1GB for local FunASR models",
+    "system_tools": [
+      "ffmpeg (for local video/audio processing)",
+      "yt-dlp (optional Bilibili fallback)"
+    ],
+    "memory": "~2GB RAM recommended (local mode)",
+    "network": true
+  },
+  "asr_backends": {
+    "auto": "local models first, else cloud if API key present (default)",
+    "local": "FunASR Paraformer-Large + FSMN-VAD + CT-PUNC (segment timestamps, GPU best)",
+    "cloud": "pluggable cloud provider, zero model download, stdlib only",
+    "cloud_providers": {
+      "siliconflow": "https://api.siliconflow.cn/v1/audio/transcriptions; models selectable from official list (2025-08: FunAudioLLM/SenseVoiceSmall, TeleAI/TeleSpeechASR); no timestamps",
+      "openai": "any OpenAI-compatible /audio/transcriptions endpoint via asr_base_url + asr_api_key + asr_model, e.g. Volcengine Ark https://ark.cn-beijing.volces.com/api/v3 (doubao speech models); asr_verbose_json=true requests verbose_json for segment timestamps"
+    },
+    "key_fields": "asr_api_key or env ASR_API_KEY (legacy: siliconflow_api_key / SILICONFLOW_API_KEY)",
+    "limits": "audio <=1h, file <=50MB (provider-dependent)"
+  },
+  "models": {
+    "vad": {
+      "name": "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+      "size": "~4MB",
+      "role": "语音活动检测 / 切句"
+    },
+    "punc": {
+      "name": "iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
+      "size": "~283MB",
+      "role": "标点恢复"
+    },
+    "asr": {
+      "name": "iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+      "size": "~848MB",
+      "role": "中文 ASR（Paraformer-Large 离线版）"
+    }
+  },
+  "model_layout": {
+    "hint": "download.py 按此结构下载；model_root 指到包含 vad/ punc/ paraformer/ 三层的根目录即可复用任意位置的模型",
+    "vad": "vad/speech_fsmn_vad_zh-cn-16k-common-pytorch/model.pt",
+    "punc": "punc/punc_ct-transformer_zh-cn-common-vocab272727-pytorch/model.pt",
+    "asr": "paraformer/paraformer-offline/iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch/model.pt"
+  },
+  "supported_inputs": {
+    "bilibili": [
+      "BV number",
+      "bilibili.com URL",
+      "b23.tv short link",
+      "mixed text"
+    ],
+    "local_video": [
+      "mp4",
+      "flv",
+      "avi",
+      "mkv",
+      "mov",
+      "wmv",
+      "webm",
+      "m4v",
+      "mpeg",
+      "mpg"
+    ],
+    "local_audio": [
+      "mp3",
+      "wav",
+      "m4a",
+      "aac",
+      "flac",
+      "ogg",
+      "wma",
+      "aiff"
+    ],
+    "douyin": [
+      "v.douyin.com short link",
+      "douyin.com/video/<id>"
+    ],
+    "generic": [
+      "YouTube",
+      "AcFun",
+      "weibo",
+      "etc. (via yt-dlp, needs proxy for YouTube)"
+    ]
+  },
+  "setup": {
+    "one_command": "python setup.py",
+    "auto_download_on_first_run": true,
+    "model_reuse": "config.json model_root 指向已有模型目录（如 AI-VedioToText/model）即可跳过下载",
+    "cloud_mode": "设置 SILICONFLOW_API_KEY 走云端 ASR，零模型下载、纯标准库，无 Python 环境时 run.bat/run.sh 自动安装 uv"
+  },
+  "cli_commands": [
+    {
+      "command": "<input>",
+      "description": "B 站链接 / BV 号 / 本地音视频路径"
+    },
+    {
+      "command": "--setup",
+      "description": "一键安装：环境检查 + 下载模型 + 写配置"
+    },
+    {
+      "command": "--init",
+      "description": "下载缺失的 ASR 模型"
+    },
+    {
+      "command": "--status",
+      "description": "检查模型/缓存/ffmpeg 状态"
+    },
+    {
+      "command": "--clear-cache",
+      "description": "清理所有缓存"
+    },
+    {
+      "command": "--info",
+      "description": "显示 skill 元数据"
+    }
+  ]
+}
