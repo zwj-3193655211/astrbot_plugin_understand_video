@@ -37,6 +37,8 @@ for _name in ("websockets", "httpcore", "httpx", "openai", "urllib3"):
 
 # ==================== AstrBot SDK ====================
 from astrbot.api.event import filter, AstrMessageEvent
+from astrbot.api.message_components import Plain
+from astrbot.api.event import MessageChain
 from astrbot.api.star import Context, Star, StarTools, register
 from astrbot.api import logger
 
@@ -445,13 +447,13 @@ class UnderstandVideoPlugin(Star):
         自动识别消息中包含的视频链接（B站/抖音/YouTube/AcFun/西瓜/微博），
         命中后 stop_event() 阻止 LLM 处理，由插件自己接管。
 
-        这样用户发 "https://b23.tv/xxx 这个视频讲了啥" 就能被识别，
-        不用记 /video 命令。
+        关键设计：钩子里**不**用 yield event.plain_result()。
+        因为 AstrBot 钩子 await 只执行一次，async generator 后续 yield 会被丢弃。
+        改为：钩子只检测 + stop_event + 启动 asyncio.create_task，
+        task 里用 event.send() 直接发消息（不依赖 respond stage）。
 
-        排除条件：
-        - 消息以 /video、/understand、/transcribe 开头（让 cmd_video 处理）
-        - 已经在处理中（避免并发）
-        - 不是 URL（只是文字）
+        这样 /video 命令路径仍走 cmd_video 的 yield 模式（兼容 AstrBot 命令系统），
+        自然语言路径用独立 task 走 event.send 模式（避免钩子 yield 丢失）。
         """
         try:
             msg = (event.message_str or "").strip()
@@ -480,9 +482,104 @@ class UnderstandVideoPlugin(Star):
         except Exception:
             pass
 
-        # 直接复用 cmd_video 的处理流程（异步化不阻塞事件循环）
-        async for r in self.cmd_video(event):
-            yield r
+        # 启动后台 task 处理（不在钩子里 yield，避免 yield 丢失）
+        asyncio.create_task(self._run_video_in_task(event, url))
+
+    async def _run_video_in_task(self, event: AstrMessageEvent, url: str):
+        """
+        独立 task 跑 video 处理：用 event.send 直接发，不依赖 respond stage。
+        复制 cmd_video 的核心逻辑（但去 yield 化）。
+        """
+        from datetime import datetime as _dt
+        start = _dt.now()
+        try:
+            # 1. 环境检查
+            ready, missing = self._check_env()
+            if not ready:
+                await event.send(MessageChain([Plain(
+                    f"❌ 环境未就绪，缺少：\n"
+                    + "\n".join(f"  • {m}" for m in missing)
+                    + "\n\n请先运行 /video_install 初始化环境"
+                )]))
+                return
+
+            # 2. 同步配置
+            self._sync_to_skill_config()
+
+            # 3. 类型预判
+            info = _vt.identify_input(url)
+            type_hint = {
+                "bilibili": "B 站", "douyin": "抖音",
+                "local_video": "本地视频", "local_audio": "本地音频",
+                "generic_url": "通用平台", "unknown": "未知",
+            }.get(info["type"], "未知")
+            await event.send(MessageChain([Plain(
+                f"🎬 开始处理（{type_hint}）\n"
+                f"  输入：{url[:100]}{'...' if len(url) > 100 else ''}"
+            )]))
+
+            # 4. 跑转写（不阻塞事件循环）
+            self._is_processing = True
+            self._stop_flag = False
+            try:
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, _vt.run, url)
+            finally:
+                self._is_processing = False
+                self._stop_flag = False
+
+            # 5. 处理结果
+            if not isinstance(result, dict):
+                await event.send(MessageChain([Plain(f"❌ 异常返回：{result}")]))
+                return
+
+            status = result.get("status")
+            if status != "success":
+                await event.send(MessageChain([Plain(_format_error(result))]))
+                return
+
+            title = result.get("title", "未知标题")
+            transcription = result.get("transcription", "")
+            duration = result.get("duration", 0)
+            elapsed = (_dt.now() - start).seconds
+            txt_path = result.get("transcription_path", "")
+
+            await event.send(MessageChain([Plain(
+                f"✅ 转写完成\n"
+                f"  📌 标题：{title}\n"
+                f"  📁 来源：{type_hint}\n"
+                f"  ⏱️ 时长：{_format_duration(duration)}\n"
+                f"  📝 字符数：{len(transcription)}\n"
+                f"  🕒 耗时：{elapsed // 60}分{elapsed % 60}秒\n"
+                f"  💾 已保存：{txt_path}"
+            )]))
+
+            # 6. AI 总结
+            if not transcription:
+                return
+
+            await event.send(MessageChain([Plain("🤖 正在生成 AI 总结...")]))
+            summary = await self._summarize_with_ai(transcription, title)
+            if not summary:
+                await event.send(MessageChain([Plain(
+                    "⚠️ AI 总结失败（请检查 AstrBot 是否配置了 LLM provider）\n"
+                    f"转写文本已保存到：{txt_path}"
+                )]))
+                return
+
+            await event.send(MessageChain([Plain(
+                f"📺 视频理解结果\n"
+                f"📌 标题：{title}\n\n"
+                f"🤖 AI 总结：\n{summary}\n\n"
+                f"⏱️ 总耗时：{elapsed // 60}分{elapsed % 60}秒"
+            )]))
+
+        except Exception as e:
+            logger.exception(f"[video] auto-detect processing failed: {e}")
+            try:
+                await event.send(MessageChain([Plain(f"❌ 处理异常：{e}")]))
+            except Exception:
+                pass
 
     # ==================== 命令处理 ====================
 
